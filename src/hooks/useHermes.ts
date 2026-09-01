@@ -17,18 +17,53 @@ export function useHermesRealtime() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const channel = supabase.channel("hermes-realtime");
-    for (const table of TABLES) {
-      channel.on("postgres_changes", { event: "*", schema: "public", table }, () => {
-        void queryClient.invalidateQueries({ queryKey: ["hermes"] });
+    const invalidate = () => {
+      void queryClient.invalidateQueries({ queryKey: ["hermes"] });
+    };
+
+    let channel = supabase.channel("hermes-realtime-" + Math.random().toString(36).slice(2));
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let closed = false;
+
+    const connect = () => {
+      for (const table of TABLES) {
+        channel.on("postgres_changes", { event: "*", schema: "public", table }, invalidate);
+      }
+      channel.subscribe((status) => {
+        if (status === "SUBSCRIBED") invalidate();
+        if (
+          !closed &&
+          (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED")
+        ) {
+          retry = setTimeout(() => {
+            void supabase.removeChannel(channel);
+            channel = supabase.channel(
+              "hermes-realtime-" + Math.random().toString(36).slice(2),
+            );
+            connect();
+          }, 3000);
+        }
       });
-    }
-    channel.subscribe();
+    };
+    connect();
+
+    // Rede/aba voltando: garante dados frescos mesmo se algum evento se perdeu.
+    const onFocus = () => invalidate();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
     return () => {
+      closed = true;
+      if (retry) clearTimeout(retry);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
       void supabase.removeChannel(channel);
     };
   }, [queryClient]);
 }
+
 
 export function useAgents(enabled = true) {
   return useQuery({
