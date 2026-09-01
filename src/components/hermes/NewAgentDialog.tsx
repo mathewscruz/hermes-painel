@@ -35,7 +35,7 @@ export function NewAgentDialog({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState("automation");
-  const [version, setVersion] = useState("0.1.0");
+  const [version, setVersion] = useState("0.20.6");
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -44,7 +44,7 @@ export function NewAgentDialog({
     try {
       const slug = slugify(name);
       const agent = await createAgent({ name, slug, description, kind, version, config: {} });
-      toast.success("Agente criado.");
+      toast.success("Provisionamento iniciado. O agente ficará online automaticamente.");
       onOpenChange(false);
       setName("");
       setDescription("");
@@ -62,8 +62,8 @@ export function NewAgentDialog({
         <DialogHeader>
           <DialogTitle>Novo agente</DialogTitle>
           <DialogDescription>
-            Cadastre um agente da sua estrutura Hermes. As funções e conexões são configuradas na
-            página do agente.
+            Cria um perfil Hermes isolado, workspace, API local, serviço e conexão com o painel.
+            Funções e integrações adicionais podem ser configuradas depois.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">

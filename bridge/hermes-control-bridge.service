@@ -16,6 +16,11 @@ ProtectHome=read-only
 StateDirectory=hermes-control-bridge
 StateDirectoryMode=0700
 ReadWritePaths=%h/.local/state/hermes-control-bridge
+ReadWritePaths=%h/.hermes/profiles
+ReadWritePaths=%h/hermes-agent-workspaces
+ReadWritePaths=%h/.config/systemd/user
+ReadWritePaths=%h/.config/hermes-control-bridge.json
+ReadWritePaths=%h/.config/hermes-control-bridge.env
 
 [Install]
 WantedBy=default.target

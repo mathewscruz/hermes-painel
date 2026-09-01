@@ -13,8 +13,10 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as MapaRouteImport } from './routes/mapa'
 import { Route as AgentesSlugRouteImport } from './routes/agentes.$slug'
+import { Route as ApiHermesAgentsRouteImport } from './routes/api/hermes/agents'
 import { Route as ApiHermesCommandsRouteImport } from './routes/api/hermes/commands'
 import { Route as ApiPublicHermesHeartbeatRouteImport } from './routes/api/public/hermes/heartbeat'
+import { Route as ApiPublicHermesRegisterAgentRouteImport } from './routes/api/public/hermes/register-agent'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -36,6 +38,11 @@ const AgentesSlugRoute = AgentesSlugRouteImport.update({
   path: '/agentes/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiHermesAgentsRoute = ApiHermesAgentsRouteImport.update({
+  id: '/api/hermes/agents',
+  path: '/api/hermes/agents',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiHermesCommandsRoute = ApiHermesCommandsRouteImport.update({
   id: '/api/hermes/commands',
   path: '/api/hermes/commands',
@@ -47,22 +54,32 @@ const ApiPublicHermesHeartbeatRoute =
     path: '/api/public/hermes/heartbeat',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHermesRegisterAgentRoute =
+  ApiPublicHermesRegisterAgentRouteImport.update({
+    id: '/api/public/hermes/register-agent',
+    path: '/api/public/hermes/register-agent',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/mapa': typeof MapaRoute
   '/agentes/$slug': typeof AgentesSlugRoute
+  '/api/hermes/agents': typeof ApiHermesAgentsRoute
   '/api/hermes/commands': typeof ApiHermesCommandsRoute
   '/api/public/hermes/heartbeat': typeof ApiPublicHermesHeartbeatRoute
+  '/api/public/hermes/register-agent': typeof ApiPublicHermesRegisterAgentRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/mapa': typeof MapaRoute
   '/agentes/$slug': typeof AgentesSlugRoute
+  '/api/hermes/agents': typeof ApiHermesAgentsRoute
   '/api/hermes/commands': typeof ApiHermesCommandsRoute
   '/api/public/hermes/heartbeat': typeof ApiPublicHermesHeartbeatRoute
+  '/api/public/hermes/register-agent': typeof ApiPublicHermesRegisterAgentRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -70,8 +87,10 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/mapa': typeof MapaRoute
   '/agentes/$slug': typeof AgentesSlugRoute
+  '/api/hermes/agents': typeof ApiHermesAgentsRoute
   '/api/hermes/commands': typeof ApiHermesCommandsRoute
   '/api/public/hermes/heartbeat': typeof ApiPublicHermesHeartbeatRoute
+  '/api/public/hermes/register-agent': typeof ApiPublicHermesRegisterAgentRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -80,24 +99,30 @@ export interface FileRouteTypes {
     | '/auth'
     | '/mapa'
     | '/agentes/$slug'
+    | '/api/hermes/agents'
     | '/api/hermes/commands'
     | '/api/public/hermes/heartbeat'
+    | '/api/public/hermes/register-agent'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/mapa'
     | '/agentes/$slug'
+    | '/api/hermes/agents'
     | '/api/hermes/commands'
     | '/api/public/hermes/heartbeat'
+    | '/api/public/hermes/register-agent'
   id:
     | '__root__'
     | '/'
     | '/auth'
     | '/mapa'
     | '/agentes/$slug'
+    | '/api/hermes/agents'
     | '/api/hermes/commands'
     | '/api/public/hermes/heartbeat'
+    | '/api/public/hermes/register-agent'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -105,8 +130,10 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   MapaRoute: typeof MapaRoute
   AgentesSlugRoute: typeof AgentesSlugRoute
+  ApiHermesAgentsRoute: typeof ApiHermesAgentsRoute
   ApiHermesCommandsRoute: typeof ApiHermesCommandsRoute
   ApiPublicHermesHeartbeatRoute: typeof ApiPublicHermesHeartbeatRoute
+  ApiPublicHermesRegisterAgentRoute: typeof ApiPublicHermesRegisterAgentRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -139,6 +166,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentesSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/hermes/agents': {
+      id: '/api/hermes/agents'
+      path: '/api/hermes/agents'
+      fullPath: '/api/hermes/agents'
+      preLoaderRoute: typeof ApiHermesAgentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/hermes/commands': {
       id: '/api/hermes/commands'
       path: '/api/hermes/commands'
@@ -153,6 +187,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHermesHeartbeatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hermes/register-agent': {
+      id: '/api/public/hermes/register-agent'
+      path: '/api/public/hermes/register-agent'
+      fullPath: '/api/public/hermes/register-agent'
+      preLoaderRoute: typeof ApiPublicHermesRegisterAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -161,8 +202,10 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   MapaRoute: MapaRoute,
   AgentesSlugRoute: AgentesSlugRoute,
+  ApiHermesAgentsRoute: ApiHermesAgentsRoute,
   ApiHermesCommandsRoute: ApiHermesCommandsRoute,
   ApiPublicHermesHeartbeatRoute: ApiPublicHermesHeartbeatRoute,
+  ApiPublicHermesRegisterAgentRoute: ApiPublicHermesRegisterAgentRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

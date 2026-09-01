@@ -15,7 +15,10 @@ import json
 import logging
 import os
 import re
+import secrets
+import shutil
 import signal
+import socket
 import sqlite3
 import subprocess
 import threading
@@ -39,6 +42,7 @@ ALLOWED_COMMANDS = {
     "steer_run",
     "approve_run",
     "deny_run",
+    "provision_agent",
 }
 _SECRET_PATTERNS = [
     re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+"),
@@ -425,6 +429,301 @@ class HermesControlBridge:
             raise RuntimeError(redact(completed.stderr or completed.stdout or "systemctl failed"))
         return {"service": agent.service, "action": action, "active": self.service_active(agent)}
 
+    @staticmethod
+    def atomic_write(path: Path, content: str, mode: int) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        temporary.write_text(content, encoding="utf-8")
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+
+    @staticmethod
+    def upsert_env_values(path: Path, values: dict[str, str]) -> None:
+        existing = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+        remaining = dict(values)
+        output: list[str] = []
+        for line in existing:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                key = stripped.split("=", 1)[0].strip()
+                if key in remaining:
+                    output.append(f"{key}={remaining.pop(key)}")
+                    continue
+            output.append(line)
+        if output and output[-1] != "":
+            output.append("")
+        output.extend(f"{key}={value}" for key, value in remaining.items())
+        HermesControlBridge.atomic_write(path, "\n".join(output).rstrip() + "\n", 0o600)
+
+    def next_api_port(self) -> int:
+        configured = {
+            urllib.parse.urlparse(agent.api_url).port
+            for agent in self.config.agents
+            if urllib.parse.urlparse(agent.api_url).port
+        }
+        for port in range(8650, 8700):
+            if port in configured:
+                continue
+            probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                probe.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+            finally:
+                probe.close()
+        raise RuntimeError("No free API port is available in the provisioning range")
+
+    def persist_bridge_agent(
+        self,
+        agent: AgentConfig,
+        api_key_env: str,
+        heartbeat_secret_env: str,
+        api_key: str,
+        heartbeat_secret: str,
+    ) -> None:
+        env_path = Path.home() / ".config" / "hermes-control-bridge.env"
+        config_path = Path.home() / ".config" / "hermes-control-bridge.json"
+        self.upsert_env_values(
+            env_path,
+            {api_key_env: api_key, heartbeat_secret_env: heartbeat_secret},
+        )
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        agents = [item for item in raw.get("agents", []) if item.get("slug") != agent.slug]
+        agents.append(
+            {
+                "slug": agent.slug,
+                "profile": agent.profile,
+                "service": agent.service,
+                "api_url": agent.api_url,
+                "api_key_env": api_key_env,
+                "heartbeat_secret_env": heartbeat_secret_env,
+                "version": agent.version,
+            }
+        )
+        raw["agents"] = agents
+        self.atomic_write(config_path, json.dumps(raw, indent=2) + "\n", 0o600)
+        self.config = BridgeConfig(
+            panel_url=self.config.panel_url,
+            poll_seconds=self.config.poll_seconds,
+            agents=tuple([item for item in self.config.agents if item.slug != agent.slug] + [agent]),
+        )
+        self.agent_by_slug[agent.slug] = agent
+
+    def provision_agent(self, controller: AgentConfig, payload: dict[str, Any]) -> dict[str, Any]:
+        if controller.slug != "hermes-principal":
+            raise ValueError("Only hermes-principal can provision agents")
+        slug = str(payload.get("slug", "")).strip().lower()
+        target_agent_id = str(payload.get("target_agent_id", "")).strip()
+        name = str(payload.get("name", "")).strip()[:120]
+        description = str(payload.get("description", "")).strip()[:2000]
+        kind = str(payload.get("kind", "automation")).strip()[:80]
+        version = str(payload.get("version", "0.20.6")).strip()[:100]
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", slug):
+            raise ValueError("Invalid provisioned agent slug")
+        if slug in {"default", "hermes", "test", "tmp", "root", "sudo"}:
+            raise ValueError("Reserved provisioned agent slug")
+        if not re.fullmatch(r"[0-9a-fA-F-]{36}", target_agent_id):
+            raise ValueError("Invalid target agent id")
+        if not name:
+            raise ValueError("Provisioned agent name is required")
+        existing = self.agent_by_slug.get(slug)
+        if existing:
+            return {
+                "agent_id": target_agent_id,
+                "slug": slug,
+                "profile": existing.profile,
+                "service": existing.service,
+                "api_url": existing.api_url,
+                "active": self.service_active(existing),
+                "reconciled": True,
+            }
+
+        profile_dir = Path.home() / ".hermes" / "profiles" / slug
+        workspace = Path.home() / "hermes-agent-workspaces" / slug
+        service = f"hermes-gateway-{slug}.service"
+        service_path = Path.home() / ".config" / "systemd" / "user" / service
+        port = self.next_api_port()
+        api_key = secrets.token_hex(32)
+        heartbeat_secret = secrets.token_urlsafe(48)
+        env_suffix = re.sub(r"[^A-Z0-9]", "_", slug.upper())
+        api_key_env = f"HERMES_AGENT_{env_suffix}_API_KEY"
+        heartbeat_secret_env = f"HERMES_AGENT_{env_suffix}_HEARTBEAT_SECRET"
+        created_profile = False
+
+        try:
+            if not profile_dir.exists():
+                completed = subprocess.run(
+                    [
+                        "/usr/local/lib/hermes-agent/venv/bin/python",
+                        "-m",
+                        "hermes_cli.main",
+                        "profile",
+                        "create",
+                        slug,
+                        "--no-alias",
+                        "--description",
+                        description or f"Agente Hermes {name}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=120,
+                )
+                if completed.returncode != 0:
+                    raise RuntimeError(redact(completed.stderr or completed.stdout))
+                created_profile = True
+
+            workspace.mkdir(parents=True, exist_ok=True)
+            profile_config = (
+                "model:\n"
+                "  default: gpt-5.6-sol\n"
+                "  provider: openai-codex\n"
+                "terminal:\n"
+                f"  cwd: {workspace}\n"
+                "  home_mode: profile\n"
+                "approvals:\n"
+                "  mode: smart\n"
+                "security:\n"
+                "  redact_secrets: true\n"
+                "_config_version: 39\n"
+            )
+            self.atomic_write(profile_dir / "config.yaml", profile_config, 0o600)
+            profile_env = (
+                "API_SERVER_ENABLED=true\n"
+                "API_SERVER_HOST=127.0.0.1\n"
+                f"API_SERVER_PORT={port}\n"
+                f"API_SERVER_KEY={api_key}\n"
+                f"API_SERVER_MODEL_NAME={slug}\n"
+            )
+            self.atomic_write(profile_dir / ".env", profile_env, 0o600)
+            source_auth = Path.home() / ".hermes" / "auth.json"
+            if not source_auth.exists():
+                raise RuntimeError("Primary Hermes model credential is unavailable")
+            shutil.copy2(source_auth, profile_dir / "auth.json")
+            os.chmod(profile_dir / "auth.json", 0o600)
+            soul = (
+                f"# {name}\n\n"
+                f"Missão: {description or 'Executar tarefas do domínio definido pelo operador.'}\n\n"
+                "## Guardrails\n"
+                "- Trabalhe apenas no escopo solicitado pelo operador.\n"
+                "- Não herde memória, credenciais operacionais ou contexto de outros agentes.\n"
+                "- Solicite autorização explícita antes de mutações externas sensíveis.\n"
+                "- Valide por leitura real qualquer alteração antes de declarar sucesso.\n"
+                f"- Tipo operacional declarado: {kind}.\n"
+            )
+            self.atomic_write(profile_dir / "SOUL.md", soul, 0o600)
+
+            unit = f"""[Unit]
+Description=Hermes Agent Gateway - {name}
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/hermes-agent/venv/bin/python -m hermes_cli.main --profile {slug} gateway run
+WorkingDirectory={profile_dir}
+Environment=\"PATH=/usr/local/lib/hermes-agent/venv/bin:/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"
+Environment=\"VIRTUAL_ENV=/usr/local/lib/hermes-agent/venv\"
+Environment=\"HERMES_HOME={profile_dir}\"
+Restart=always
+RestartSec=5
+RestartForceExitStatus=75
+RestartPreventExitStatus=78
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=70
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+"""
+            self.atomic_write(service_path, unit, 0o644)
+            subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, timeout=30)
+            subprocess.run(
+                ["systemctl", "--user", "enable", "--now", service],
+                check=True,
+                timeout=120,
+            )
+
+            new_agent = AgentConfig(
+                slug=slug,
+                profile=slug,
+                service=service,
+                api_url=f"http://127.0.0.1:{port}",
+                api_key=api_key,
+                heartbeat_secret=heartbeat_secret,
+                version=version,
+            )
+            deadline = time.time() + 45
+            last_error = ""
+            while time.time() < deadline:
+                try:
+                    health = self.api(new_agent, "/health")
+                    if health.get("status") == "ok":
+                        break
+                except Exception as exc:
+                    last_error = redact(exc)
+                time.sleep(2)
+            else:
+                raise RuntimeError(f"Provisioned API did not become healthy: {last_error}")
+
+            registration_url = urllib.parse.urljoin(
+                self.config.panel_url, "/api/public/hermes/register-agent"
+            )
+            registration = request_json(
+                registration_url,
+                method="POST",
+                headers={
+                    "X-Hermes-Agent": controller.slug,
+                    "X-Hermes-Secret": controller.heartbeat_secret,
+                },
+                body={
+                    "agent_id": target_agent_id,
+                    "slug": slug,
+                    "secret_sha256": hashlib.sha256(heartbeat_secret.encode()).hexdigest(),
+                    "profile": slug,
+                    "service": service,
+                    "api_port": port,
+                    "version": version,
+                },
+                timeout=45,
+            )
+            if not registration.get("ok"):
+                raise RuntimeError("Panel rejected provisioned agent registration")
+
+            self.persist_bridge_agent(
+                new_agent,
+                api_key_env,
+                heartbeat_secret_env,
+                api_key,
+                heartbeat_secret,
+            )
+            self.panel(new_agent, {"status": "running"})
+            return {
+                "agent_id": target_agent_id,
+                "slug": slug,
+                "profile": slug,
+                "service": service,
+                "api_url": f"http://127.0.0.1:{port}",
+                "active": self.service_active(new_agent),
+                "reconciled": False,
+            }
+        except Exception:
+            if created_profile:
+                subprocess.run(
+                    ["systemctl", "--user", "disable", "--now", service],
+                    check=False,
+                    timeout=60,
+                )
+                service_path.unlink(missing_ok=True)
+                subprocess.run(["systemctl", "--user", "daemon-reload"], check=False, timeout=30)
+                shutil.rmtree(profile_dir, ignore_errors=True)
+                shutil.rmtree(workspace, ignore_errors=True)
+            raise
+
     def api(self, agent: AgentConfig, path: str, *, method: str = "GET", body=None, command_id=None):
         headers = {"Authorization": f"Bearer {agent.api_key}"}
         if command_id:
@@ -498,6 +797,8 @@ class HermesControlBridge:
                 result = self.durable_effect(
                     agent, command_id, name, lambda: self.service_action(agent, name)
                 )
+            elif name == "provision_agent":
+                result = self.provision_agent(agent, payload)
             elif name == "run_task":
                 text = str(payload.get("input", "")).strip()
                 if not text:

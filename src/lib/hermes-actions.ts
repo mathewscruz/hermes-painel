@@ -43,13 +43,25 @@ export interface AgentInput {
 }
 
 export async function createAgent(input: AgentInput) {
-  const { data, error } = await supabase
-    .from("agents")
-    .insert({ ...input, status: "stopped" })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (sessionError || !accessToken) throw new Error("Sessão expirada. Entre novamente no painel.");
+
+  const response = await fetch("/api/hermes/agents", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+  const result = (await response.json().catch(() => ({}))) as {
+    agent?: unknown;
+    command_id?: string;
+    error?: string;
+  };
+  if (!response.ok) throw new Error(result.error || "Falha ao criar agente");
+  return result.agent as AgentInput & { id: string; status: string };
 }
 
 export async function updateAgent(id: string, input: Partial<AgentInput>) {

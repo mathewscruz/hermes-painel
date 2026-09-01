@@ -100,6 +100,33 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual("succeeded", result["status"])
         self.assertEqual([(self.agent.slug, "restart")], self.bridge.service_calls)
 
+    def test_provision_command_uses_typed_handler(self):
+        payload = {
+            "target_agent_id": "22222222-2222-4222-8222-222222222222",
+            "slug": "novo-agente",
+            "name": "Novo Agente",
+        }
+        called = []
+        self.bridge.provision_agent = lambda agent, body: called.append((agent.slug, body)) or {
+            "slug": body["slug"],
+            "active": True,
+        }
+        result = self.bridge.execute_command(self.agent, self.command("provision_agent", payload))
+        self.assertEqual("succeeded", result["status"])
+        self.assertEqual("novo-agente", result["result"]["slug"])
+        self.assertEqual([(self.agent.slug, payload)], called)
+
+    def test_only_principal_can_provision(self):
+        with self.assertRaisesRegex(ValueError, "Only hermes-principal"):
+            self.bridge.provision_agent(
+                self.agent,
+                {
+                    "target_agent_id": "22222222-2222-4222-8222-222222222222",
+                    "slug": "novo-agente",
+                    "name": "Novo Agente",
+                },
+            )
+
     def test_uncertain_side_effect_is_not_repeated(self):
         command = self.command("restart")
         self.state.prepare_effect(command["id"], self.agent.slug, "restart")
