@@ -46,6 +46,10 @@ export interface Run {
   id: string;
   agent_id: string;
   capability_id: string | null;
+  command_id: string | null;
+  external_run_id: string | null;
+  session_id: string | null;
+  metadata: Record<string, unknown>;
   title: string;
   status: string;
   summary: string;
