@@ -55,82 +55,35 @@ export type Database = {
           },
         ]
       }
-      agent_bridge_credentials: {
-        Row: {
-          agent_slug: string
-          created_at: string
-          is_active: boolean
-          secret_sha256: string
-          updated_at: string
-        }
-        Insert: {
-          agent_slug: string
-          created_at?: string
-          is_active?: boolean
-          secret_sha256: string
-          updated_at?: string
-        }
-        Update: {
-          agent_slug?: string
-          created_at?: string
-          is_active?: boolean
-          secret_sha256?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "agent_bridge_credentials_agent_slug_fkey"
-            columns: ["agent_slug"]
-            isOneToOne: true
-            referencedRelation: "agents"
-            referencedColumns: ["slug"]
-          },
-        ]
-      }
       agent_commands: {
         Row: {
           acknowledged_at: string | null
           agent_id: string
           command: string
-          completed_at: string | null
           created_at: string
-          error: string
           id: string
           note: string
-          payload: Json
           requested_by: string | null
-          result: Json
-          started_at: string | null
           status: string
         }
         Insert: {
           acknowledged_at?: string | null
           agent_id: string
           command: string
-          completed_at?: string | null
           created_at?: string
-          error?: string
           id?: string
           note?: string
-          payload?: Json
           requested_by?: string | null
-          result?: Json
-          started_at?: string | null
           status?: string
         }
         Update: {
           acknowledged_at?: string | null
           agent_id?: string
           command?: string
-          completed_at?: string | null
           created_at?: string
-          error?: string
           id?: string
           note?: string
-          payload?: Json
           requested_by?: string | null
-          result?: Json
-          started_at?: string | null
           status?: string
         }
         Relationships: [
@@ -191,7 +144,6 @@ export type Database = {
         Row: {
           agent_id: string
           created_at: string
-          external_event_id: string | null
           id: string
           level: string
           message: string
@@ -200,7 +152,6 @@ export type Database = {
         Insert: {
           agent_id: string
           created_at?: string
-          external_event_id?: string | null
           id?: string
           level?: string
           message: string
@@ -209,7 +160,6 @@ export type Database = {
         Update: {
           agent_id?: string
           created_at?: string
-          external_event_id?: string | null
           id?: string
           level?: string
           message?: string
@@ -229,13 +179,9 @@ export type Database = {
         Row: {
           agent_id: string
           capability_id: string | null
-          command_id: string | null
           duration_ms: number | null
-          external_run_id: string | null
           finished_at: string | null
           id: string
-          metadata: Json
-          session_id: string | null
           started_at: string
           status: string
           summary: string
@@ -244,13 +190,9 @@ export type Database = {
         Insert: {
           agent_id: string
           capability_id?: string | null
-          command_id?: string | null
           duration_ms?: number | null
-          external_run_id?: string | null
           finished_at?: string | null
           id?: string
-          metadata?: Json
-          session_id?: string | null
           started_at?: string
           status?: string
           summary?: string
@@ -259,13 +201,9 @@ export type Database = {
         Update: {
           agent_id?: string
           capability_id?: string | null
-          command_id?: string | null
           duration_ms?: number | null
-          external_run_id?: string | null
           finished_at?: string | null
           id?: string
-          metadata?: Json
-          session_id?: string | null
           started_at?: string
           status?: string
           summary?: string
@@ -386,23 +324,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      claim_agent_commands: {
-        Args: {
-          _agent_id: string
-          _lease_seconds?: number
-          _limit?: number
-        }
-        Returns: Database["public"]["Tables"]["agent_commands"]["Row"][]
-      }
-      enqueue_agent_command: {
-        Args: {
-          _agent_id: string
-          _command: string
-          _note?: string
-          _payload?: Json
-        }
-        Returns: Database["public"]["Tables"]["agent_commands"]["Row"]
-      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
