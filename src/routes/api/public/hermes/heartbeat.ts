@@ -21,6 +21,7 @@ const commandResultSchema = z.object({
 const runUpdateSchema = z.object({
   external_run_id: z.string().min(1).max(200),
   command_id: z.string().uuid().nullable().optional(),
+  capability_id: z.string().uuid().nullable().optional(),
   session_id: z.string().max(256).nullable().optional(),
   title: z.string().min(1).max(500),
   status: z.enum(["running", "waiting_approval", "stopping", "success", "failed", "cancelled"]),
@@ -192,10 +193,22 @@ export const Route = createFileRoute("/api/public/hermes/heartbeat")({
         }
 
         for (const run of body.run_updates ?? []) {
+          if (run.capability_id) {
+            const { data: capability, error: capabilityError } = await supabaseAdmin
+              .from("agent_capabilities")
+              .select("id")
+              .eq("id", run.capability_id)
+              .eq("agent_id", agent.id)
+              .maybeSingle();
+            if (capabilityError || !capability) {
+              return jsonResponse({ error: "run capability mismatch" }, 400);
+            }
+          }
           const runRecord = {
               agent_id: agent.id,
               external_run_id: run.external_run_id,
               command_id: run.command_id ?? null,
+              capability_id: run.capability_id ?? null,
               session_id: run.session_id ?? null,
               title: run.title,
               status: run.status,
@@ -216,6 +229,34 @@ export const Route = createFileRoute("/api/public/hermes/heartbeat")({
             ? await supabaseAdmin.from("agent_runs").update(runRecord).eq("id", existingRun.id)
             : await supabaseAdmin.from("agent_runs").insert(runRecord);
           if (runError) return jsonResponse({ error: "run update failed" }, 500);
+
+          if (run.capability_id) {
+            const [allRuns, successfulRuns] = await Promise.all([
+              supabaseAdmin
+                .from("agent_runs")
+                .select("id", { count: "exact", head: true })
+                .eq("capability_id", run.capability_id),
+              supabaseAdmin
+                .from("agent_runs")
+                .select("id", { count: "exact", head: true })
+                .eq("capability_id", run.capability_id)
+                .eq("status", "success"),
+            ]);
+            if (allRuns.error || successfulRuns.error) {
+              return jsonResponse({ error: "capability metrics failed" }, 500);
+            }
+            const { error: capabilityUpdateError } = await supabaseAdmin
+              .from("agent_capabilities")
+              .update({
+                executions_count: allRuns.count ?? 0,
+                success_count: successfulRuns.count ?? 0,
+              })
+              .eq("id", run.capability_id)
+              .eq("agent_id", agent.id);
+            if (capabilityUpdateError) {
+              return jsonResponse({ error: "capability metrics failed" }, 500);
+            }
+          }
         }
 
         const { data: pending, error: pendingError } = await supabaseAdmin.rpc(

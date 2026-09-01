@@ -158,3 +158,62 @@ export function useCommands(agentId?: string, enabled = true) {
     },
   });
 }
+
+export function usePendingCommands(enabled = true) {
+  return useQuery({
+    queryKey: ["hermes", "commands", "pending-all"],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agent_commands")
+        .select("*")
+        .in("status", ["pending", "claimed"])
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as Command[];
+    },
+  });
+}
+
+export function useActiveRuns(enabled = true) {
+  return useQuery({
+    queryKey: ["hermes", "runs", "active-all"],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agent_runs")
+        .select("*")
+        .eq("status", "running")
+        .order("started_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as Run[];
+    },
+  });
+}
+
+export function useDashboardMetrics(enabled = true) {
+  return useQuery({
+    queryKey: ["hermes", "dashboard-metrics"],
+    enabled,
+    queryFn: async () => {
+      const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
+      const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+      const [agents, active, today, failures, unhealthy] = await Promise.all([
+        supabase.from("agents").select("id", { count: "exact", head: true }),
+        supabase.from("agents").select("id", { count: "exact", head: true }).eq("status", "running"),
+        supabase.from("agent_runs").select("id", { count: "exact", head: true }).gte("started_at", dayAgo),
+        supabase.from("agent_runs").select("id", { count: "exact", head: true }).eq("status", "failed").gte("started_at", hourAgo),
+        supabase.from("agent_connections").select("id", { count: "exact", head: true }).in("health", ["degraded", "down"]),
+      ]);
+      const firstError = [agents, active, today, failures, unhealthy].find((item) => item.error)?.error;
+      if (firstError) throw firstError;
+      return {
+        total: agents.count ?? 0,
+        active: active.count ?? 0,
+        today: today.count ?? 0,
+        failures: failures.count ?? 0,
+        unhealthy: unhealthy.count ?? 0,
+      };
+    },
+  });
+}

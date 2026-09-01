@@ -18,10 +18,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCanOperate, useIsAdmin } from "@/hooks/useRole";
 import {
   useAgents,
-  useCommands,
+  useActiveRuns,
   useConnections,
+  useDashboardMetrics,
   useEvents,
   useHermesRealtime,
+  usePendingCommands,
   useRuns,
 } from "@/hooks/useHermes";
 import { sendCommand } from "@/lib/hermes-actions";
@@ -93,30 +95,24 @@ function Overview() {
   const runs = useRuns(undefined, 60, authed);
   const events = useEvents(undefined, 25, authed);
   const connections = useConnections(undefined, authed);
-  const commands = useCommands(undefined, authed);
+  const exactMetrics = useDashboardMetrics(authed);
+  const activeRuns = useActiveRuns(authed);
+  const exactPendingCommands = usePendingCommands(authed);
   const [openNew, setOpenNew] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const agentList = useMemo(() => agents.data ?? [], [agents.data]);
   const runList = useMemo(() => runs.data ?? [], [runs.data]);
   const connList = useMemo(() => connections.data ?? [], [connections.data]);
-  const pendingCommands = (commands.data ?? []).filter((command) =>
-    ["pending", "claimed"].includes(command.status),
-  );
+  const pendingCommands = exactPendingCommands.data ?? [];
 
-  const kpis = useMemo(() => {
-    const dayAgo = Date.now() - 86_400_000;
-    const hourAgo = Date.now() - 3_600_000;
-    return {
-      active: agentList.filter((a) => a.status === "running").length,
-      total: agentList.length,
-      today: runList.filter((r) => new Date(r.started_at).getTime() > dayAgo).length,
-      failures: runList.filter(
-        (r) => r.status === "failed" && new Date(r.started_at).getTime() > hourAgo,
-      ).length,
-      unhealthy: connList.filter((c) => c.health === "degraded" || c.health === "down").length,
-    };
-  }, [agentList, runList, connList]);
+  const kpis = exactMetrics.data ?? {
+    active: 0,
+    total: 0,
+    today: 0,
+    failures: 0,
+    unhealthy: 0,
+  };
 
   async function control(agentId: string, command: CommandName) {
     setPendingId(agentId + command);
@@ -200,8 +196,7 @@ function Overview() {
 
           {agentList.map((agent) => {
             const aConns = connList.filter((c) => c.agent_id === agent.id);
-            const aRuns = runList.filter((r) => r.agent_id === agent.id);
-            const running = aRuns.filter((r) => r.status === "running");
+            const running = (activeRuns.data ?? []).filter((r) => r.agent_id === agent.id);
             const pending = pendingCommands.find((c) => c.agent_id === agent.id);
             const stale = isStale(agent);
 

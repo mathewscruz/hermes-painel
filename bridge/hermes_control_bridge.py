@@ -183,6 +183,7 @@ class StateStore:
                   run_id TEXT PRIMARY KEY,
                   slug TEXT NOT NULL,
                   command_id TEXT,
+                  capability_id TEXT,
                   title TEXT NOT NULL,
                   session_id TEXT,
                   started_at TEXT NOT NULL,
@@ -215,6 +216,11 @@ class StateStore:
                 );
                 """
             )
+            active_run_columns = {
+                row[1] for row in self.connection.execute("PRAGMA table_info(active_runs)")
+            }
+            if "capability_id" not in active_run_columns:
+                self.connection.execute("ALTER TABLE active_runs ADD COLUMN capability_id TEXT")
 
     def command_result(self, command_id: str) -> dict[str, Any] | None:
         with self.lock:
@@ -251,16 +257,17 @@ class StateStore:
             )
 
     def add_run(
-        self, run_id: str, slug: str, command_id: str, title: str, session_id: str | None
+        self, run_id: str, slug: str, command_id: str, capability_id: str | None,
+        title: str, session_id: str | None
     ) -> None:
         with self.lock, self.connection:
             self.connection.execute(
                 """
                 INSERT OR REPLACE INTO active_runs
-                  (run_id, slug, command_id, title, session_id, started_at, last_status)
-                VALUES (?, ?, ?, ?, ?, ?, 'running')
+                  (run_id, slug, command_id, capability_id, title, session_id, started_at, last_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'running')
                 """,
-                (run_id, slug, command_id, title, session_id, utc_now()),
+                (run_id, slug, command_id, capability_id, title, session_id, utc_now()),
             )
 
     def dispatch_intent(self, command_id: str) -> sqlite3.Row | None:
@@ -494,6 +501,9 @@ class HermesControlBridge:
                 if not text:
                     raise ValueError("run_task requires payload.input")
                 session_id = str(payload.get("session_id", "")).strip() or None
+                capability_id = str(payload.get("capability_id", "")).strip() or None
+                if capability_id and not re.fullmatch(r"[0-9a-fA-F-]{36}", capability_id):
+                    raise ValueError("run_task requires a valid payload.capability_id")
                 title = str(payload.get("title", "")).strip()[:500] or text[:120]
                 request_body: dict[str, Any] = {"input": text}
                 if session_id:
@@ -530,7 +540,9 @@ class HermesControlBridge:
                     if not run_id.startswith("run_"):
                         raise RuntimeError("Hermes did not return a valid run_id")
                     self.state.finish_dispatch(command_id, run_id)
-                self.state.add_run(run_id, agent.slug, command_id, title, session_id)
+                self.state.add_run(
+                    run_id, agent.slug, command_id, capability_id, title, session_id
+                )
                 result = {"run_id": run_id, "session_id": session_id, "status": "started"}
                 self.ensure_stream(agent, run_id)
             else:
@@ -623,6 +635,7 @@ class HermesControlBridge:
                     update = {
                         "external_run_id": run_id,
                         "command_id": row["command_id"],
+                        "capability_id": row["capability_id"],
                         "session_id": row["session_id"],
                         "title": row["title"],
                         "status": "failed",
@@ -643,6 +656,7 @@ class HermesControlBridge:
             update = {
                 "external_run_id": run_id,
                 "command_id": row["command_id"],
+                "capability_id": row["capability_id"],
                 "session_id": status_payload.get("session_id") or row["session_id"],
                 "title": row["title"],
                 "status": mapped,
@@ -719,6 +733,7 @@ class HermesControlBridge:
                                 {
                                     "external_run_id": run_id,
                                     "command_id": row["command_id"],
+                                    "capability_id": row["capability_id"],
                                     "session_id": row["session_id"],
                                     "title": row["title"],
                                     "status": "waiting_approval",

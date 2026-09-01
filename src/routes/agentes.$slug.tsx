@@ -112,6 +112,7 @@ function AgentDetail() {
   const [connKind, setConnKind] = useState("api");
   const [taskInput, setTaskInput] = useState("");
   const [taskNote, setTaskNote] = useState("");
+  const [taskCapabilityId, setTaskCapabilityId] = useState("");
   const [steerByRun, setSteerByRun] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState({ name: "", description: "", version: "", config: "{}" });
@@ -155,7 +156,7 @@ function AgentDetail() {
   }
 
   async function runTask() {
-    if (!agentId || !taskInput.trim()) return;
+    if (!agentId || !taskInput.trim() || !taskCapabilityId) return;
     try {
       await sendCommand(
         agentId,
@@ -164,11 +165,13 @@ function AgentDetail() {
           input: taskInput.trim(),
           session_id: `panel-${agent.slug}-${crypto.randomUUID()}`,
           title: taskNote.trim() || taskInput.trim().slice(0, 120),
+          capability_id: taskCapabilityId,
         },
         taskNote.trim(),
       );
       setTaskInput("");
       setTaskNote("");
+      setTaskCapabilityId("");
       toast.success("Tarefa enfileirada para execução.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao enviar tarefa");
@@ -314,12 +317,29 @@ function AgentDetail() {
               value={taskInput}
               onChange={(event) => setTaskInput(event.target.value)}
             />
+            <Select value={taskCapabilityId} onValueChange={setTaskCapabilityId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a função responsável pela tarefa" />
+              </SelectTrigger>
+              <SelectContent>
+                {(caps.data ?? [])
+                  .filter((cap) => cap.enabled)
+                  .map((cap) => (
+                    <SelectItem key={cap.id} value={cap.id}>
+                      {cap.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
             <Input
               placeholder="Título ou observação de auditoria (opcional)"
               value={taskNote}
               onChange={(event) => setTaskNote(event.target.value)}
             />
-            <Button disabled={!taskInput.trim()} onClick={() => void runTask()}>
+            <Button
+              disabled={!taskInput.trim() || !taskCapabilityId}
+              onClick={() => void runTask()}
+            >
               <Send className="size-4" /> Executar tarefa
             </Button>
           </div>
