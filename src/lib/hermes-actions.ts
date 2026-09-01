@@ -1,7 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import type { CommandName } from "@/lib/hermes";
 
-async function logAudit(action: string, target: string, details: Record<string, unknown> = {}) {
+async function logAudit(action: string, target: string, details: Json = {}) {
   const { data } = await supabase.auth.getUser();
   await supabase.from("audit_log").insert({
     actor: data.user?.id ?? null,
@@ -32,7 +33,7 @@ export interface AgentInput {
   description: string;
   kind: string;
   version: string;
-  config: Record<string, unknown>;
+  config: Json;
 }
 
 export async function createAgent(input: AgentInput) {
@@ -49,7 +50,7 @@ export async function createAgent(input: AgentInput) {
 export async function updateAgent(id: string, input: Partial<AgentInput>) {
   const { error } = await supabase.from("agents").update(input).eq("id", id);
   if (error) throw error;
-  await logAudit("agent:update", id, input as Record<string, unknown>);
+  await logAudit("agent:update", id, input as Json);
 }
 
 export async function deleteAgent(id: string) {
