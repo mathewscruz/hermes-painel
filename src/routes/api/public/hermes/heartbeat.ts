@@ -151,17 +151,28 @@ export const Route = createFileRoute("/api/public/hermes/heartbeat")({
         if (heartbeatError) return jsonResponse({ error: "heartbeat update failed" }, 500);
 
         if (body.events?.length) {
-          const { error: eventsError } = await supabaseAdmin.from("agent_events").upsert(
-            body.events.map((event) => ({
+          for (const event of body.events) {
+            if (event.event_id) {
+              const { data: existing, error: lookupError } = await supabaseAdmin
+                .from("agent_events")
+                .select("id")
+                .eq("agent_id", agent.id)
+                .eq("external_event_id", event.event_id)
+                .maybeSingle();
+              if (lookupError) return jsonResponse({ error: "event lookup failed" }, 500);
+              if (existing) continue;
+            }
+            const { error: eventError } = await supabaseAdmin.from("agent_events").insert({
               agent_id: agent.id,
               external_event_id: event.event_id ?? null,
               level: event.level === "warn" ? "warning" : event.level,
               message: event.message,
               metadata: event.metadata as Json,
-            })),
-            { onConflict: "agent_id,external_event_id", ignoreDuplicates: true },
-          );
-          if (eventsError) return jsonResponse({ error: "event ingest failed" }, 500);
+            });
+            if (eventError && eventError.code !== "23505") {
+              return jsonResponse({ error: "event ingest failed" }, 500);
+            }
+          }
         }
 
         for (const result of body.command_results ?? []) {
@@ -181,8 +192,7 @@ export const Route = createFileRoute("/api/public/hermes/heartbeat")({
         }
 
         for (const run of body.run_updates ?? []) {
-          const { error: runError } = await supabaseAdmin.from("agent_runs").upsert(
-            {
+          const runRecord = {
               agent_id: agent.id,
               external_run_id: run.external_run_id,
               command_id: run.command_id ?? null,
@@ -194,9 +204,17 @@ export const Route = createFileRoute("/api/public/hermes/heartbeat")({
               finished_at: run.finished_at ?? null,
               duration_ms: run.duration_ms ?? null,
               metadata: run.metadata as Json,
-            },
-            { onConflict: "agent_id,external_run_id" },
-          );
+            };
+          const { data: existingRun, error: runLookupError } = await supabaseAdmin
+            .from("agent_runs")
+            .select("id")
+            .eq("agent_id", agent.id)
+            .eq("external_run_id", run.external_run_id)
+            .maybeSingle();
+          if (runLookupError) return jsonResponse({ error: "run lookup failed" }, 500);
+          const { error: runError } = existingRun
+            ? await supabaseAdmin.from("agent_runs").update(runRecord).eq("id", existingRun.id)
+            : await supabaseAdmin.from("agent_runs").insert(runRecord);
           if (runError) return jsonResponse({ error: "run update failed" }, 500);
         }
 
