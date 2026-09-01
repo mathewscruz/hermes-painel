@@ -400,6 +400,8 @@ class HermesControlBridge:
         self.stop_event = threading.Event()
         self.stream_threads: dict[str, threading.Thread] = {}
         self.agent_by_slug = {agent.slug: agent for agent in config.agents}
+        self.last_session_sync: dict[str, float] = {}
+        self.observed_session_status: dict[tuple[str, str], str] = {}
 
     def service_active(self, agent: AgentConfig) -> bool:
         completed = subprocess.run(
@@ -774,6 +776,114 @@ class HermesControlBridge:
                 merged[str(update["external_run_id"])] = update
         return list(merged.values())
 
+    @staticmethod
+    def epoch_to_utc(value: Any) -> str | None:
+        try:
+            return datetime.fromtimestamp(float(value), timezone.utc).isoformat().replace(
+                "+00:00", "Z"
+            )
+        except (TypeError, ValueError, OSError):
+            return None
+
+    def collect_session_updates(
+        self, agent: AgentConfig
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Mirror real Hermes sessions, including Telegram work, into the panel."""
+        now = time.monotonic()
+        if now - self.last_session_sync.get(agent.slug, 0.0) < 15.0:
+            return [], []
+        self.last_session_sync[agent.slug] = now
+
+        health = self.api(agent, "/health/detailed")
+        sessions_payload = self.api(agent, "/api/sessions?limit=20")
+        raw_sessions = sessions_payload.get("data", [])
+        sessions = [item for item in raw_sessions if isinstance(item, dict)][:20]
+        gateway_busy = bool(health.get("gateway_busy"))
+        current_epoch = time.time()
+
+        updates: list[dict[str, Any]] = []
+        events: list[dict[str, Any]] = []
+        for index, session in enumerate(sessions):
+            session_id = str(session.get("id", "")).strip()
+            if not session_id or len(session_id) > 180:
+                continue
+            last_active = session.get("last_active")
+            try:
+                age_seconds = max(0.0, current_epoch - float(last_active))
+            except (TypeError, ValueError):
+                age_seconds = 10_000.0
+            is_active = (
+                index == 0
+                and gateway_busy
+                and session.get("ended_at") is None
+                and age_seconds < 300
+            )
+            status = "running" if is_active else "success"
+            started_at = self.epoch_to_utc(session.get("started_at")) or utc_now()
+            finished_at = None
+            if not is_active:
+                finished_at = self.epoch_to_utc(
+                    session.get("ended_at") or session.get("last_active")
+                ) or utc_now()
+            duration_ms = None
+            if finished_at:
+                try:
+                    start_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                    end_dt = datetime.fromisoformat(finished_at.replace("Z", "+00:00"))
+                    duration_ms = min(
+                        2_147_483_647,
+                        max(0, int((end_dt - start_dt).total_seconds() * 1000)),
+                    )
+                except ValueError:
+                    duration_ms = None
+
+            title = str(session.get("title") or "Sessão Hermes")[:500]
+            message_count = int(session.get("message_count") or 0)
+            tool_count = int(session.get("tool_call_count") or 0)
+            source = str(session.get("source") or "unknown")[:80]
+            external_run_id = f"session:{session_id}"
+            updates.append(
+                {
+                    "external_run_id": external_run_id,
+                    "command_id": None,
+                    "capability_id": None,
+                    "session_id": session_id,
+                    "title": title,
+                    "status": status,
+                    "summary": f"{source} · {message_count} mensagens · {tool_count} ferramentas",
+                    "started_at": started_at,
+                    "finished_at": finished_at,
+                    "duration_ms": duration_ms,
+                    "metadata": {
+                        "source": source,
+                        "message_count": message_count,
+                        "tool_call_count": tool_count,
+                        "api_call_count": int(session.get("api_call_count") or 0),
+                        "model": str(session.get("model") or "")[:120],
+                        "observed_from": "hermes_sessions_api",
+                    },
+                }
+            )
+
+            status_key = (agent.slug, session_id)
+            previous_status = self.observed_session_status.get(status_key)
+            if previous_status != status:
+                event_phase = "ativa" if status == "running" else "concluída"
+                events.append(
+                    {
+                        "event_id": f"session:{session_id}:{status}",
+                        "level": "info",
+                        "message": f"Sessão {event_phase}: {title}",
+                        "metadata": {
+                            "session_id": session_id,
+                            "source": source,
+                            "status": status,
+                        },
+                    }
+                )
+                self.observed_session_status[status_key] = status
+        return updates, events
+
     def acknowledge_run_updates(self, updates: list[dict[str, Any]]) -> None:
         terminal_ids = [
             str(update["external_run_id"])
@@ -785,11 +895,17 @@ class HermesControlBridge:
     def cycle_agent(self, agent: AgentConfig) -> None:
         active = self.service_active(agent)
         run_updates = self.collect_run_updates(agent, active)
+        session_updates, session_events = self.collect_session_updates(agent) if active else ([], [])
+        merged_updates = {
+            str(update["external_run_id"]): update
+            for update in [*run_updates, *session_updates]
+        }
         response = self.panel(
             agent,
             {
                 "status": "running" if active else "stopped",
-                "run_updates": run_updates,
+                "events": session_events,
+                "run_updates": list(merged_updates.values()),
             },
         )
         self.acknowledge_run_updates(run_updates)
