@@ -8,14 +8,29 @@ export async function sendCommand(
   payload: Json = {},
   note = "",
 ) {
-  const { data, error } = await supabase.rpc("enqueue_agent_command", {
-    _agent_id: agentId,
-    _command: command,
-    _payload: payload,
-    _note: note,
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (sessionError || !accessToken) throw new Error("Sessão expirada. Entre novamente no painel.");
+
+  const response = await fetch("/api/hermes/commands", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      agent_id: agentId,
+      command,
+      payload,
+      note,
+    }),
   });
-  if (error) throw error;
-  return data;
+  const result = (await response.json().catch(() => ({}))) as {
+    command?: unknown;
+    error?: string;
+  };
+  if (!response.ok) throw new Error(result.error || "Falha ao enfileirar comando");
+  return result.command;
 }
 
 export interface AgentInput {
