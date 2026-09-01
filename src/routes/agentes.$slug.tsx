@@ -159,7 +159,7 @@ function AgentDetail() {
         name: form.name,
         description: form.description,
         version: form.version,
-        config,
+        config: config as never,
       });
       toast.success("Configuração salva.");
     } catch (err) {
