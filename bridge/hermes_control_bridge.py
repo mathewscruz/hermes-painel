@@ -218,6 +218,11 @@ class StateStore:
                   event_hash TEXT NOT NULL,
                   PRIMARY KEY (run_id, event_hash)
                 );
+                CREATE TABLE IF NOT EXISTS journal_cursors (
+                  slug TEXT PRIMARY KEY,
+                  cursor TEXT NOT NULL,
+                  updated_at TEXT NOT NULL
+                );
                 """
             )
             active_run_columns = {
@@ -395,6 +400,28 @@ class StateStore:
                 (run_id, digest),
             ).fetchone()
         return row is not None
+
+    def journal_cursor(self, slug: str) -> str | None:
+        with self.lock:
+            row = self.connection.execute(
+                "SELECT cursor FROM journal_cursors WHERE slug = ?", (slug,)
+            ).fetchone()
+        return str(row["cursor"]) if row else None
+
+    def save_journal_cursor(self, slug: str, cursor: str) -> None:
+        if not cursor:
+            return
+        with self.lock, self.connection:
+            self.connection.execute(
+                """
+                INSERT INTO journal_cursors (slug, cursor, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(slug) DO UPDATE SET
+                  cursor = excluded.cursor,
+                  updated_at = excluded.updated_at
+                """,
+                (slug, cursor, utc_now()),
+            )
 
 
 class HermesControlBridge:
@@ -1185,6 +1212,79 @@ WantedBy=default.target
                 self.observed_session_status[status_key] = status
         return updates, events
 
+    def collect_journal_events(
+        self, agent: AgentConfig
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Read only new systemd journal entries for one allow-listed gateway."""
+        cursor = self.state.journal_cursor(agent.slug)
+        command = [
+            "journalctl",
+            "--user",
+            "-u",
+            agent.service,
+            "--output=json",
+            "--no-pager",
+            "-n",
+            "50",
+        ]
+        if cursor:
+            command.extend(["--after-cursor", cursor])
+        else:
+            command.extend(["--since", "10 seconds ago"])
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=20,
+        )
+        if completed.returncode != 0:
+            LOG.warning(
+                "journal read failed slug=%s detail=%s",
+                agent.slug,
+                redact(completed.stderr or completed.stdout),
+            )
+            return [], None
+
+        events: list[dict[str, Any]] = []
+        latest_cursor: str | None = None
+        for raw_line in completed.stdout.splitlines():
+            try:
+                row = json.loads(raw_line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            row_cursor = str(row.get("__CURSOR", ""))
+            if row_cursor:
+                latest_cursor = row_cursor
+            message = " ".join(str(row.get("MESSAGE", "")).split())
+            if not message:
+                continue
+            safe_message = redact(message, limit=1_200)
+            priority_raw = str(row.get("PRIORITY", "6"))
+            try:
+                priority = int(priority_raw)
+            except ValueError:
+                priority = 6
+            level = "error" if priority <= 3 else "warning" if priority == 4 else "info"
+            digest = hashlib.sha256(
+                (row_cursor or f"{agent.slug}:{safe_message}").encode()
+            ).hexdigest()
+            events.append(
+                {
+                    "event_id": f"journal:{digest}",
+                    "level": level,
+                    "message": safe_message,
+                    "metadata": {
+                        "source": "systemd-journal",
+                        "service": agent.service,
+                        "priority": priority,
+                    },
+                }
+            )
+        return events, latest_cursor
+
     def acknowledge_run_updates(self, updates: list[dict[str, Any]]) -> None:
         terminal_ids = [
             str(update["external_run_id"])
@@ -1197,6 +1297,7 @@ WantedBy=default.target
         active = self.service_active(agent)
         run_updates = self.collect_run_updates(agent, active)
         session_updates, session_events = self.collect_session_updates(agent) if active else ([], [])
+        journal_events, journal_cursor = self.collect_journal_events(agent)
         merged_updates = {
             str(update["external_run_id"]): update
             for update in [*run_updates, *session_updates]
@@ -1205,10 +1306,12 @@ WantedBy=default.target
             agent,
             {
                 "status": "running" if active else "stopped",
-                "events": session_events,
+                "events": [*session_events, *journal_events],
                 "run_updates": list(merged_updates.values()),
             },
         )
+        if journal_cursor:
+            self.state.save_journal_cursor(agent.slug, journal_cursor)
         self.acknowledge_run_updates(run_updates)
         for command in response.get("pending_commands", []):
             if not isinstance(command, dict):

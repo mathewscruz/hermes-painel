@@ -138,6 +138,7 @@ export function useEvents(agentId?: string, limit = 40, enabled = true) {
       if (error) throw error;
       return (data ?? []) as unknown as AgentEvent[];
     },
+    refetchInterval: 3_000,
   });
 }
 

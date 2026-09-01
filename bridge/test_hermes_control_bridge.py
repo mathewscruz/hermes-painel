@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from hermes_control_bridge import (
@@ -35,6 +36,9 @@ class FakeBridge(HermesControlBridge):
 
     def ensure_stream(self, agent, run_id):
         return None
+
+    def collect_journal_events(self, agent):
+        return [], None
 
 
 class BridgeTests(unittest.TestCase):
@@ -174,6 +178,27 @@ class BridgeTests(unittest.TestCase):
         self.assertTrue(self.state.remember_event("run_1", event))
         self.assertTrue(self.state.event_seen("run_1", event))
         self.assertFalse(self.state.remember_event("run_1", event))
+
+    def test_journal_events_are_incremental_and_redacted(self):
+        cursor = "s=journal-cursor-1"
+        line = json.dumps(
+            {
+                "__CURSOR": cursor,
+                "PRIORITY": "4",
+                "MESSAGE": "gateway warning token=super-secret-value",
+            }
+        )
+        with patch(
+            "hermes_control_bridge.subprocess.run",
+            return_value=SimpleNamespace(returncode=0, stdout=line + "\n", stderr=""),
+        ):
+            events, latest = HermesControlBridge.collect_journal_events(self.bridge, self.agent)
+        self.assertEqual(cursor, latest)
+        self.assertEqual("warning", events[0]["level"])
+        self.assertIn("[REDACTED]", events[0]["message"])
+        self.assertNotIn("super-secret-value", events[0]["message"])
+        self.state.save_journal_cursor(self.agent.slug, latest)
+        self.assertEqual(cursor, self.state.journal_cursor(self.agent.slug))
 
     def test_missing_run_is_closed_after_gateway_restart(self):
         self.state.add_run(
