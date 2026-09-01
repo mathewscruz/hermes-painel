@@ -10,6 +10,14 @@ export function useMyRoles() {
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth.user?.id;
       if (!userId) return [];
+
+      // Mathews is the designated control-plane super-admin. Keep this UI
+      // bootstrap aligned with the server-side has_role() fallback so a
+      // missing/stale user_roles row cannot lock out the primary operator.
+      if (auth.user?.email?.trim().toLowerCase() === "mathews.cruz@origoenergia.com.br") {
+        return ["admin"];
+      }
+
       const { data, error } = await supabase
         .from("user_roles")
         .select("role")
