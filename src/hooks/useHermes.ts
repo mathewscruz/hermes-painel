@@ -183,11 +183,12 @@ export function useActiveRuns(enabled = true) {
       const { data, error } = await supabase
         .from("agent_runs")
         .select("*")
-        .eq("status", "running")
+        .in("status", ["running", "waiting_approval", "stopping"])
         .order("started_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as Run[];
     },
+    refetchInterval: 5_000,
   });
 }
 
@@ -215,5 +216,6 @@ export function useDashboardMetrics(enabled = true) {
         unhealthy: unhealthy.count ?? 0,
       };
     },
+    refetchInterval: 10_000,
   });
 }

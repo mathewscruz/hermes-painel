@@ -149,7 +149,14 @@ class BridgeTests(unittest.TestCase):
         self.assertFalse(self.state.remember_event("run_1", event))
 
     def test_missing_run_is_closed_after_gateway_restart(self):
-        self.state.add_run("run_missing", self.agent.slug, self.command("run_task")["id"], "Tarefa", None)
+        self.state.add_run(
+            "run_missing",
+            self.agent.slug,
+            self.command("run_task")["id"],
+            None,
+            "Tarefa",
+            None,
+        )
 
         def missing(*_args, **_kwargs):
             raise RuntimeError("HTTP 404 from local API")
