@@ -19,6 +19,7 @@ export function LiveBadge({ online }: { online: boolean }) {
 
 export function AppShell({ children, email }: { children: ReactNode; email?: string }) {
   const navigate = useNavigate();
+  const { isAdmin } = useIsAdmin();
 
   async function signOut() {
     await supabase.auth.signOut();
