@@ -134,7 +134,7 @@ function Overview() {
   }
 
   return (
-    <AppShell email={user?.email ?? undefined}>
+    <AppShell email={user?.email ?? ""}>
       <NewAgentDialog open={openNew} onOpenChange={setOpenNew} />
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
