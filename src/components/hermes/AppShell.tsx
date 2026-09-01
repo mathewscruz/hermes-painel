@@ -52,6 +52,11 @@ export function AppShell({ children, email }: { children: ReactNode; email?: str
             </Link>
           </nav>
           <div className="ml-auto flex items-center gap-3">
+            {isAdmin ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-primary">
+                <ShieldCheck className="size-3" /> admin
+              </span>
+            ) : null}
             {email ? (
               <span className="hidden font-mono text-xs text-muted-foreground sm:block">
                 {email}
