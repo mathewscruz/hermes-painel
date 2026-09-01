@@ -15,6 +15,7 @@ import { AppShell, LiveBadge } from "@/components/hermes/AppShell";
 import { HealthDot, StatusPill } from "@/components/hermes/StatusPill";
 import { NewAgentDialog } from "@/components/hermes/NewAgentDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useCanOperate, useIsAdmin } from "@/hooks/useRole";
 import {
   useAgents,
   useCommands,
@@ -80,6 +81,8 @@ function Overview() {
   const navigate = useNavigate();
   const { session, user, loading } = useAuth();
   const authed = !!session;
+  const { canOperate } = useCanOperate();
+  const { isAdmin } = useIsAdmin();
 
   useEffect(() => {
     if (!loading && !session) void navigate({ to: "/auth" });
@@ -94,10 +97,12 @@ function Overview() {
   const [openNew, setOpenNew] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  const agentList = agents.data ?? [];
-  const runList = runs.data ?? [];
-  const connList = connections.data ?? [];
-  const pendingCommands = (commands.data ?? []).filter((c) => c.status === "pending");
+  const agentList = useMemo(() => agents.data ?? [], [agents.data]);
+  const runList = useMemo(() => runs.data ?? [], [runs.data]);
+  const connList = useMemo(() => connections.data ?? [], [connections.data]);
+  const pendingCommands = (commands.data ?? []).filter((command) =>
+    ["pending", "claimed"].includes(command.status),
+  );
 
   const kpis = useMemo(() => {
     const dayAgo = Date.now() - 86_400_000;
@@ -146,9 +151,11 @@ function Overview() {
         </div>
         <div className="ml-auto flex items-center gap-3">
           <LiveBadge online={!agents.isError} />
-          <Button size="sm" onClick={() => setOpenNew(true)}>
-            <Plus className="size-4" /> Novo agente
-          </Button>
+          {isAdmin ? (
+            <Button size="sm" onClick={() => setOpenNew(true)}>
+              <Plus className="size-4" /> Novo agente
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -228,7 +235,7 @@ function Overview() {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={pendingId === agent.id + "start"}
+                      disabled={!canOperate || pendingId === agent.id + "start"}
                       onClick={() => void control(agent.id, "start")}
                     >
                       <CirclePlay className="size-4 text-ok" /> Iniciar
@@ -236,7 +243,7 @@ function Overview() {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={pendingId === agent.id + "stop"}
+                      disabled={!canOperate || pendingId === agent.id + "stop"}
                       onClick={() => void control(agent.id, "stop")}
                     >
                       <CircleStop className="size-4 text-danger" /> Parar
@@ -244,7 +251,7 @@ function Overview() {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={pendingId === agent.id + "restart"}
+                      disabled={!canOperate || pendingId === agent.id + "restart"}
                       onClick={() => void control(agent.id, "restart")}
                     >
                       <RotateCw className="size-4 text-warn" /> Reiniciar
@@ -275,9 +282,7 @@ function Overview() {
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                       {aConns.length ? (
-                        aConns.map((c) => (
-                          <HealthDot key={c.id} health={c.health} label={c.name} />
-                        ))
+                        aConns.map((c) => <HealthDot key={c.id} health={c.health} label={c.name} />)
                       ) : (
                         <span className="text-muted-foreground">nenhuma</span>
                       )}

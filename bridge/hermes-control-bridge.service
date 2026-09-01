@@ -1,0 +1,21 @@
+[Unit]
+Description=Hermes Lovable Control Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/hermes-control-bridge.env
+ExecStart=/usr/bin/python3 %h/.local/lib/hermes-control-bridge/hermes_control_bridge.py --config %h/.config/hermes-control-bridge.json --state %h/.local/state/hermes-control-bridge/state.db
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+StateDirectory=hermes-control-bridge
+StateDirectoryMode=0700
+ReadWritePaths=%h/.local/state/hermes-control-bridge
+
+[Install]
+WantedBy=default.target

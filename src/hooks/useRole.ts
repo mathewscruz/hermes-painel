@@ -25,3 +25,12 @@ export function useIsAdmin() {
   const { data, isLoading } = useMyRoles();
   return { isAdmin: (data ?? []).includes("admin"), isLoading };
 }
+
+export function useCanOperate() {
+  const { data, isLoading } = useMyRoles();
+  const roles = data ?? [];
+  return {
+    canOperate: roles.includes("admin") || roles.includes("operator"),
+    isLoading,
+  };
+}

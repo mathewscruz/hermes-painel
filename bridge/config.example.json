@@ -1,0 +1,24 @@
+{
+  "panel_url": "https://hermes-painel.lovable.app/api/public/hermes/heartbeat",
+  "poll_seconds": 5,
+  "agents": [
+    {
+      "slug": "hermes-principal",
+      "profile": "default",
+      "service": "hermes-gateway.service",
+      "api_url": "http://127.0.0.1:8642",
+      "api_key_env": "HERMES_MAIN_API_KEY",
+      "heartbeat_secret_env": "HERMES_MAIN_HEARTBEAT_SECRET",
+      "version": "0.20.6"
+    },
+    {
+      "slug": "hermes-vulnerabilidades",
+      "profile": "vulnerabilidades",
+      "service": "hermes-gateway-vulnerabilidades.service",
+      "api_url": "http://127.0.0.1:8643",
+      "api_key_env": "HERMES_VULN_API_KEY",
+      "heartbeat_secret_env": "HERMES_VULN_HEARTBEAT_SECRET",
+      "version": "0.20.6"
+    }
+  ]
+}

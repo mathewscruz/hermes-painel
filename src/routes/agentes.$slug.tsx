@@ -4,16 +4,21 @@ import {
   ArrowLeft,
   CirclePlay,
   CircleStop,
+  MessageSquareText,
   Plug,
   Plus,
   RotateCw,
+  Send,
+  ShieldCheck,
   Trash2,
+  XCircle,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, LiveBadge } from "@/components/hermes/AppShell";
 import { HealthDot, StatusPill } from "@/components/hermes/StatusPill";
 import { useAuth } from "@/hooks/useAuth";
+import { useCanOperate, useIsAdmin } from "@/hooks/useRole";
 import {
   useAgents,
   useCapabilities,
@@ -63,8 +68,7 @@ export const Route = createFileRoute("/agentes/$slug")({
       { title: "Detalhe do agente — Hermes Control Center" },
       {
         name: "description",
-        content:
-          "Funções, conexões, execuções, logs ao vivo e configuração de um agente Hermes.",
+        content: "Funções, conexões, execuções, logs ao vivo e configuração de um agente Hermes.",
       },
       { property: "og:title", content: "Detalhe do agente — Hermes" },
       {
@@ -83,6 +87,8 @@ function AgentDetail() {
   const navigate = useNavigate();
   const { session, user, loading } = useAuth();
   const authed = !!session;
+  const { canOperate } = useCanOperate();
+  const { isAdmin } = useIsAdmin();
 
   useEffect(() => {
     if (!loading && !session) void navigate({ to: "/auth" });
@@ -104,6 +110,9 @@ function AgentDetail() {
   const [connName, setConnName] = useState("");
   const [connTarget, setConnTarget] = useState("");
   const [connKind, setConnKind] = useState("api");
+  const [taskInput, setTaskInput] = useState("");
+  const [taskNote, setTaskNote] = useState("");
+  const [steerByRun, setSteerByRun] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState({ name: "", description: "", version: "", config: "{}" });
   useEffect(() => {
@@ -145,6 +154,44 @@ function AgentDetail() {
     }
   }
 
+  async function runTask() {
+    if (!agentId || !taskInput.trim()) return;
+    try {
+      await sendCommand(
+        agentId,
+        "run_task",
+        {
+          input: taskInput.trim(),
+          session_id: `panel-${agent.slug}-${crypto.randomUUID()}`,
+          title: taskNote.trim() || taskInput.trim().slice(0, 120),
+        },
+        taskNote.trim(),
+      );
+      setTaskInput("");
+      setTaskNote("");
+      toast.success("Tarefa enfileirada para execução.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao enviar tarefa");
+    }
+  }
+
+  async function controlRun(
+    command: "stop_run" | "steer_run" | "approve_run" | "deny_run",
+    runId: string,
+    extra: Record<string, string> = {},
+  ) {
+    if (!agentId) return;
+    try {
+      await sendCommand(agentId, command, { run_id: runId, ...extra });
+      if (command === "steer_run") {
+        setSteerByRun((current) => ({ ...current, [runId]: "" }));
+      }
+      toast.success("Comando de execução enfileirado.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao controlar execução");
+    }
+  }
+
   async function saveSettings() {
     if (!agentId) return;
     let config: Record<string, unknown>;
@@ -180,7 +227,9 @@ function AgentDetail() {
     }
   }
 
-  const pending = (commands.data ?? []).find((c) => c.status === "pending");
+  const pending = (commands.data ?? []).find((command) =>
+    ["pending", "claimed"].includes(command.status),
+  );
 
   return (
     <AppShell email={user?.email ?? ""}>
@@ -208,13 +257,28 @@ function AgentDetail() {
           </div>
           <div className="flex items-center gap-1">
             <LiveBadge online />
-            <Button size="sm" variant="outline" onClick={() => void control("start")}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!canOperate}
+              onClick={() => void control("start")}
+            >
               <CirclePlay className="size-4 text-ok" /> Iniciar
             </Button>
-            <Button size="sm" variant="outline" onClick={() => void control("stop")}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!canOperate}
+              onClick={() => void control("stop")}
+            >
               <CircleStop className="size-4 text-danger" /> Parar
             </Button>
-            <Button size="sm" variant="outline" onClick={() => void control("restart")}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!canOperate}
+              onClick={() => void control("restart")}
+            >
               <RotateCw className="size-4 text-warn" /> Reiniciar
             </Button>
           </div>
@@ -226,14 +290,126 @@ function AgentDetail() {
         ) : null}
       </div>
 
-      <Tabs defaultValue="funcoes" className="mt-4">
+      <Tabs defaultValue={canOperate ? "controle" : "funcoes"} className="mt-4">
         <TabsList>
+          {canOperate ? <TabsTrigger value="controle">Controle</TabsTrigger> : null}
           <TabsTrigger value="funcoes">Funções</TabsTrigger>
           <TabsTrigger value="conexoes">Conexões</TabsTrigger>
           <TabsTrigger value="execucoes">Execuções</TabsTrigger>
           <TabsTrigger value="logs">Logs ao vivo</TabsTrigger>
-          <TabsTrigger value="config">Configuração</TabsTrigger>
+          {isAdmin ? <TabsTrigger value="config">Configuração</TabsTrigger> : null}
         </TabsList>
+
+        <TabsContent value="controle" className="mt-4 space-y-4">
+          <div className="panel space-y-3 p-4">
+            <div>
+              <h3 className="font-medium">Nova tarefa</h3>
+              <p className="text-xs text-muted-foreground">
+                A tarefa será executada pelo perfil isolado deste agente e registrada no histórico.
+              </p>
+            </div>
+            <Textarea
+              rows={6}
+              placeholder="Descreva a tarefa, o escopo e o resultado esperado…"
+              value={taskInput}
+              onChange={(event) => setTaskInput(event.target.value)}
+            />
+            <Input
+              placeholder="Título ou observação de auditoria (opcional)"
+              value={taskNote}
+              onChange={(event) => setTaskNote(event.target.value)}
+            />
+            <Button disabled={!taskInput.trim()} onClick={() => void runTask()}>
+              <Send className="size-4" /> Executar tarefa
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {(runs.data ?? [])
+              .filter((run) => ["running", "waiting_approval", "stopping"].includes(run.status))
+              .map((run) => {
+                const externalRunId = run.external_run_id;
+                return (
+                  <div key={run.id} className="panel space-y-3 p-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className={`font-mono text-[11px] uppercase ${runTone(run.status)}`}>
+                        {RUN_LABEL[run.status] ?? run.status}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{run.title}</div>
+                        <p className="truncate text-xs text-muted-foreground">{run.summary}</p>
+                      </div>
+                      {externalRunId && run.status !== "stopping" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void controlRun("stop_run", externalRunId)}
+                        >
+                          <CircleStop className="size-4 text-danger" /> Interromper
+                        </Button>
+                      ) : null}
+                    </div>
+
+                    {externalRunId && run.status === "running" ? (
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Orientação para a execução em andamento"
+                          value={steerByRun[externalRunId] ?? ""}
+                          onChange={(event) =>
+                            setSteerByRun((current) => ({
+                              ...current,
+                              [externalRunId]: event.target.value,
+                            }))
+                          }
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!(steerByRun[externalRunId] ?? "").trim()}
+                          onClick={() =>
+                            void controlRun("steer_run", externalRunId, {
+                              input: (steerByRun[externalRunId] ?? "").trim(),
+                            })
+                          }
+                        >
+                          <MessageSquareText className="size-4" /> Orientar
+                        </Button>
+                      </div>
+                    ) : null}
+
+                    {externalRunId && run.status === "waiting_approval" ? (
+                      <div className="flex flex-wrap gap-2 rounded-md border border-warn/40 bg-warn/10 p-3">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            void controlRun("approve_run", externalRunId, { choice: "once" })
+                          }
+                        >
+                          <ShieldCheck className="size-4" /> Aprovar uma vez
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void controlRun("approve_run", externalRunId, { choice: "session" })
+                          }
+                        >
+                          <ShieldCheck className="size-4" /> Aprovar nesta sessão
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void controlRun("deny_run", externalRunId)}
+                        >
+                          <XCircle className="size-4 text-danger" /> Negar
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+          </div>
+        </TabsContent>
 
         <TabsContent value="funcoes" className="mt-4 space-y-3">
           {(caps.data ?? []).map((cap) => (
@@ -255,9 +431,7 @@ function AgentDetail() {
                 >
                   {successRate(cap)}%
                 </div>
-                <div className="font-mono text-[11px] uppercase text-muted-foreground">
-                  sucesso
-                </div>
+                <div className="font-mono text-[11px] uppercase text-muted-foreground">sucesso</div>
               </div>
               <Switch
                 checked={cap.enabled}
@@ -271,11 +445,7 @@ function AgentDetail() {
                   })
                 }
               />
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => void deleteCapability(cap.id, cap.agent_id)}
-              >
+              <Button size="icon" variant="ghost" onClick={() => void deleteCapability(cap.id)}>
                 <Trash2 className="size-4 text-danger" />
               </Button>
             </div>
@@ -333,10 +503,7 @@ function AgentDetail() {
               <span className="font-mono text-[11px] text-muted-foreground">
                 testada {relativeTime(conn.last_checked_at)}
               </span>
-              <Select
-                value={conn.health}
-                onValueChange={(v) => void touchConnection(conn.id, v)}
-              >
+              <Select value={conn.health} onValueChange={(v) => void touchConnection(conn.id, v)}>
                 <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
@@ -348,11 +515,7 @@ function AgentDetail() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => void deleteConnection(conn.id, conn.agent_id)}
-              >
+              <Button size="icon" variant="ghost" onClick={() => void deleteConnection(conn.id)}>
                 <Trash2 className="size-4 text-danger" />
               </Button>
             </div>
@@ -436,9 +599,7 @@ function AgentDetail() {
                 <span className="shrink-0 text-muted-foreground">
                   {new Date(ev.created_at).toLocaleTimeString("pt-BR")}
                 </span>
-                <span className={`w-16 shrink-0 uppercase ${levelTone(ev.level)}`}>
-                  {ev.level}
-                </span>
+                <span className={`w-16 shrink-0 uppercase ${levelTone(ev.level)}`}>{ev.level}</span>
                 <span className="text-foreground/90">{ev.message}</span>
               </div>
             ))}

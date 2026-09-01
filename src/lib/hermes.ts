@@ -1,8 +1,10 @@
 export type AgentStatus = "running" | "stopped" | "error" | "restarting" | "starting";
 export type Health = "healthy" | "degraded" | "down" | "unknown";
-export type RunStatus = "running" | "success" | "failed";
+export type RunStatus =
+  "running" | "waiting_approval" | "stopping" | "success" | "failed" | "cancelled";
 export type LogLevel = "info" | "warning" | "error";
-export type CommandName = "start" | "stop" | "restart";
+export type CommandName =
+  "start" | "stop" | "restart" | "run_task" | "stop_run" | "steer_run" | "approve_run" | "deny_run";
 
 export interface Agent {
   id: string;
@@ -87,8 +89,11 @@ export const HEALTH_LABEL: Record<string, string> = {
 
 export const RUN_LABEL: Record<string, string> = {
   running: "Executando",
+  waiting_approval: "Aguardando aprovação",
+  stopping: "Interrompendo",
   success: "Sucesso",
   failed: "Falhou",
+  cancelled: "Cancelada",
 };
 
 /** Classe de cor (texto) para cada estado de agente. */
@@ -125,6 +130,11 @@ export function runTone(status: string): string {
       return "text-ok";
     case "failed":
       return "text-danger";
+    case "waiting_approval":
+    case "stopping":
+      return "text-warn";
+    case "cancelled":
+      return "text-idle";
     default:
       return "text-primary";
   }
