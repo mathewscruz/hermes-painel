@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Activity, LogOut, Network, Radar } from "lucide-react";
+import { Activity, LogOut, Network, Radar, ShieldCheck } from "lucide-react";
+import { useIsAdmin } from "@/hooks/useRole";
 import type { ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
