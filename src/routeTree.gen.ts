@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as MapaRouteImport } from './routes/mapa'
 import { Route as AgentesSlugRouteImport } from './routes/agentes.$slug'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MapaRoute = MapaRouteImport.update({
+  id: '/mapa',
+  path: '/mapa',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentesSlugRoute = AgentesSlugRouteImport.update({
   id: '/agentes/$slug',
   path: '/agentes/$slug',
@@ -32,30 +38,34 @@ const AgentesSlugRoute = AgentesSlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/mapa': typeof MapaRoute
   '/agentes/$slug': typeof AgentesSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/mapa': typeof MapaRoute
   '/agentes/$slug': typeof AgentesSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/mapa': typeof MapaRoute
   '/agentes/$slug': typeof AgentesSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/agentes/$slug'
+  fullPaths: '/' | '/auth' | '/mapa' | '/agentes/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/agentes/$slug'
-  id: '__root__' | '/' | '/auth' | '/agentes/$slug'
+  to: '/' | '/auth' | '/mapa' | '/agentes/$slug'
+  id: '__root__' | '/' | '/auth' | '/mapa' | '/agentes/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  MapaRoute: typeof MapaRoute
   AgentesSlugRoute: typeof AgentesSlugRoute
 }
 
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mapa': {
+      id: '/mapa'
+      path: '/mapa'
+      fullPath: '/mapa'
+      preLoaderRoute: typeof MapaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agentes/$slug': {
       id: '/agentes/$slug'
       path: '/agentes/$slug'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  MapaRoute: MapaRoute,
   AgentesSlugRoute: AgentesSlugRoute,
 }
 export const routeTree = rootRouteImport
