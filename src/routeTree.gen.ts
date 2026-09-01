@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as MapaRouteImport } from './routes/mapa'
 import { Route as AgentesSlugRouteImport } from './routes/agentes.$slug'
+import { Route as ApiPublicHermesHeartbeatRouteImport } from './routes/api/public/hermes/heartbeat'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,18 +35,26 @@ const AgentesSlugRoute = AgentesSlugRouteImport.update({
   path: '/agentes/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHermesHeartbeatRoute =
+  ApiPublicHermesHeartbeatRouteImport.update({
+    id: '/api/public/hermes/heartbeat',
+    path: '/api/public/hermes/heartbeat',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/mapa': typeof MapaRoute
   '/agentes/$slug': typeof AgentesSlugRoute
+  '/api/public/hermes/heartbeat': typeof ApiPublicHermesHeartbeatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/mapa': typeof MapaRoute
   '/agentes/$slug': typeof AgentesSlugRoute
+  '/api/public/hermes/heartbeat': typeof ApiPublicHermesHeartbeatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +62,22 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/mapa': typeof MapaRoute
   '/agentes/$slug': typeof AgentesSlugRoute
+  '/api/public/hermes/heartbeat': typeof ApiPublicHermesHeartbeatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/mapa' | '/agentes/$slug'
+  fullPaths:
+    '/' | '/auth' | '/mapa' | '/agentes/$slug' | '/api/public/hermes/heartbeat'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/mapa' | '/agentes/$slug'
-  id: '__root__' | '/' | '/auth' | '/mapa' | '/agentes/$slug'
+  to:
+    '/' | '/auth' | '/mapa' | '/agentes/$slug' | '/api/public/hermes/heartbeat'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/mapa'
+    | '/agentes/$slug'
+    | '/api/public/hermes/heartbeat'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +85,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   MapaRoute: typeof MapaRoute
   AgentesSlugRoute: typeof AgentesSlugRoute
+  ApiPublicHermesHeartbeatRoute: typeof ApiPublicHermesHeartbeatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +118,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentesSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hermes/heartbeat': {
+      id: '/api/public/hermes/heartbeat'
+      path: '/api/public/hermes/heartbeat'
+      fullPath: '/api/public/hermes/heartbeat'
+      preLoaderRoute: typeof ApiPublicHermesHeartbeatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +133,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   MapaRoute: MapaRoute,
   AgentesSlugRoute: AgentesSlugRoute,
+  ApiPublicHermesHeartbeatRoute: ApiPublicHermesHeartbeatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
