@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_bridge_credentials: {
+        Row: {
+          agent_slug: string
+          created_at: string
+          is_active: boolean
+          secret_sha256: string
+          updated_at: string
+        }
+        Insert: {
+          agent_slug: string
+          created_at?: string
+          is_active?: boolean
+          secret_sha256: string
+          updated_at?: string
+        }
+        Update: {
+          agent_slug?: string
+          created_at?: string
+          is_active?: boolean
+          secret_sha256?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_bridge_credentials_agent_slug_fkey"
+            columns: ["agent_slug"]
+            isOneToOne: true
+            referencedRelation: "agents"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       agent_capabilities: {
         Row: {
           agent_id: string
@@ -55,38 +87,6 @@ export type Database = {
           },
         ]
       }
-      agent_bridge_credentials: {
-        Row: {
-          agent_slug: string
-          created_at: string
-          is_active: boolean
-          secret_sha256: string
-          updated_at: string
-        }
-        Insert: {
-          agent_slug: string
-          created_at?: string
-          is_active?: boolean
-          secret_sha256: string
-          updated_at?: string
-        }
-        Update: {
-          agent_slug?: string
-          created_at?: string
-          is_active?: boolean
-          secret_sha256?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "agent_bridge_credentials_agent_slug_fkey"
-            columns: ["agent_slug"]
-            isOneToOne: true
-            referencedRelation: "agents"
-            referencedColumns: ["slug"]
-          },
-        ]
-      }
       agent_commands: {
         Row: {
           acknowledged_at: string | null
@@ -96,6 +96,7 @@ export type Database = {
           created_at: string
           error: string
           id: string
+          lease_expires_at: string | null
           note: string
           payload: Json
           requested_by: string | null
@@ -111,6 +112,7 @@ export type Database = {
           created_at?: string
           error?: string
           id?: string
+          lease_expires_at?: string | null
           note?: string
           payload?: Json
           requested_by?: string | null
@@ -126,6 +128,7 @@ export type Database = {
           created_at?: string
           error?: string
           id?: string
+          lease_expires_at?: string | null
           note?: string
           payload?: Json
           requested_by?: string | null
@@ -286,6 +289,13 @@ export type Database = {
             referencedRelation: "agent_capabilities"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "agent_runs_command_id_fkey"
+            columns: ["command_id"]
+            isOneToOne: false
+            referencedRelation: "agent_commands"
+            referencedColumns: ["id"]
+          },
         ]
       }
       agents: {
@@ -387,12 +397,14 @@ export type Database = {
     }
     Functions: {
       claim_agent_commands: {
-        Args: {
-          _agent_id: string
-          _lease_seconds?: number
-          _limit?: number
-        }
-        Returns: Database["public"]["Tables"]["agent_commands"]["Row"][]
+        Args: { _agent_id: string; _lease_seconds?: number; _limit?: number }
+        Returns: {
+          command: string
+          created_at: string
+          id: string
+          note: string
+          payload: Json
+        }[]
       }
       enqueue_agent_command: {
         Args: {
@@ -401,7 +413,7 @@ export type Database = {
           _note?: string
           _payload?: Json
         }
-        Returns: Database["public"]["Tables"]["agent_commands"]["Row"]
+        Returns: string
       }
       has_role: {
         Args: {

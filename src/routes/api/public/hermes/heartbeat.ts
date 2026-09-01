@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
+import type { Json } from "@/integrations/supabase/types";
 
 const eventSchema = z.object({
   event_id: z.string().min(1).max(128).optional(),
@@ -156,7 +157,7 @@ export const Route = createFileRoute("/api/public/hermes/heartbeat")({
               external_event_id: event.event_id ?? null,
               level: event.level === "warn" ? "warning" : event.level,
               message: event.message,
-              metadata: event.metadata,
+              metadata: event.metadata as Json,
             })),
             { onConflict: "agent_id,external_event_id", ignoreDuplicates: true },
           );
@@ -168,7 +169,7 @@ export const Route = createFileRoute("/api/public/hermes/heartbeat")({
             .from("agent_commands")
             .update({
               status: result.status,
-              result: result.result,
+              result: result.result as Json,
               error: result.error,
               started_at: result.started_at ?? now,
               completed_at: result.completed_at ?? now,
@@ -192,7 +193,7 @@ export const Route = createFileRoute("/api/public/hermes/heartbeat")({
               started_at: run.started_at ?? now,
               finished_at: run.finished_at ?? null,
               duration_ms: run.duration_ms ?? null,
-              metadata: run.metadata,
+              metadata: run.metadata as Json,
             },
             { onConflict: "agent_id,external_run_id" },
           );
