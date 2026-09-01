@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Activity, LogOut, Network, Radar } from "lucide-react";
+import { Activity, LogOut, Network, Radar, ShieldCheck } from "lucide-react";
+import { useIsAdmin } from "@/hooks/useRole";
 import type { ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ export function LiveBadge({ online }: { online: boolean }) {
 
 export function AppShell({ children, email }: { children: ReactNode; email?: string }) {
   const navigate = useNavigate();
+  const { isAdmin } = useIsAdmin();
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -52,6 +54,11 @@ export function AppShell({ children, email }: { children: ReactNode; email?: str
             </Link>
           </nav>
           <div className="ml-auto flex items-center gap-3">
+            {isAdmin ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-primary">
+                <ShieldCheck className="size-3" /> admin
+              </span>
+            ) : null}
             {email ? (
               <span className="hidden font-mono text-xs text-muted-foreground sm:block">
                 {email}
