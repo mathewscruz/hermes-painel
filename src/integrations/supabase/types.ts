@@ -55,6 +55,38 @@ export type Database = {
           },
         ]
       }
+      agent_bridge_credentials: {
+        Row: {
+          agent_slug: string
+          created_at: string
+          is_active: boolean
+          secret_sha256: string
+          updated_at: string
+        }
+        Insert: {
+          agent_slug: string
+          created_at?: string
+          is_active?: boolean
+          secret_sha256: string
+          updated_at?: string
+        }
+        Update: {
+          agent_slug?: string
+          created_at?: string
+          is_active?: boolean
+          secret_sha256?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_bridge_credentials_agent_slug_fkey"
+            columns: ["agent_slug"]
+            isOneToOne: true
+            referencedRelation: "agents"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       agent_commands: {
         Row: {
           acknowledged_at: string | null

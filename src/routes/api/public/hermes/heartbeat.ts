@@ -65,6 +65,11 @@ function secretForSlug(slug: string): string | undefined {
   return undefined;
 }
 
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -85,11 +90,28 @@ export const Route = createFileRoute("/api/public/hermes/heartbeat")({
           return jsonResponse({ error: "unauthorized" }, 401);
         }
 
-        const expected = secretForSlug(claimedSlug);
         const provided = request.headers.get("x-hermes-secret") ?? "";
-        if (!expected || !constantTimeEqual(provided, expected)) {
+        if (provided.length < 32) {
           return jsonResponse({ error: "unauthorized" }, 401);
         }
+
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const expected = secretForSlug(claimedSlug);
+        let authenticated = Boolean(expected && constantTimeEqual(provided, expected));
+
+        if (!authenticated) {
+          const { data: credential, error: credentialError } = await supabaseAdmin
+            .from("agent_bridge_credentials")
+            .select("secret_sha256")
+            .eq("agent_slug", claimedSlug)
+            .eq("is_active", true)
+            .maybeSingle();
+          if (!credentialError && credential?.secret_sha256) {
+            authenticated = constantTimeEqual(await sha256Hex(provided), credential.secret_sha256);
+          }
+        }
+
+        if (!authenticated) return jsonResponse({ error: "unauthorized" }, 401);
 
         const contentLength = Number(request.headers.get("content-length") ?? "0");
         if (Number.isFinite(contentLength) && contentLength > 1_048_576) {
@@ -108,7 +130,6 @@ export const Route = createFileRoute("/api/public/hermes/heartbeat")({
         const body = parsed.data;
         if (body.slug !== claimedSlug) return jsonResponse({ error: "agent mismatch" }, 403);
 
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data: agent, error } = await supabaseAdmin
           .from("agents")
           .select("id")
