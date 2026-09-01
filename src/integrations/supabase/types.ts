@@ -14,7 +14,290 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agent_capabilities: {
+        Row: {
+          agent_id: string
+          created_at: string
+          description: string
+          enabled: boolean
+          executions_count: number
+          id: string
+          name: string
+          success_count: number
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          description?: string
+          enabled?: boolean
+          executions_count?: number
+          id?: string
+          name: string
+          success_count?: number
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          description?: string
+          enabled?: boolean
+          executions_count?: number
+          id?: string
+          name?: string
+          success_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_capabilities_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_commands: {
+        Row: {
+          acknowledged_at: string | null
+          agent_id: string
+          command: string
+          created_at: string
+          id: string
+          note: string
+          requested_by: string | null
+          status: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          agent_id: string
+          command: string
+          created_at?: string
+          id?: string
+          note?: string
+          requested_by?: string | null
+          status?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          agent_id?: string
+          command?: string
+          created_at?: string
+          id?: string
+          note?: string
+          requested_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_commands_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_connections: {
+        Row: {
+          agent_id: string
+          config: Json
+          created_at: string
+          health: string
+          id: string
+          kind: string
+          last_checked_at: string | null
+          name: string
+          target: string
+        }
+        Insert: {
+          agent_id: string
+          config?: Json
+          created_at?: string
+          health?: string
+          id?: string
+          kind?: string
+          last_checked_at?: string | null
+          name: string
+          target?: string
+        }
+        Update: {
+          agent_id?: string
+          config?: Json
+          created_at?: string
+          health?: string
+          id?: string
+          kind?: string
+          last_checked_at?: string | null
+          name?: string
+          target?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_connections_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_events: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          level: string
+          message: string
+          metadata: Json
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          level?: string
+          message: string
+          metadata?: Json
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          level?: string
+          message?: string
+          metadata?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_events_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_runs: {
+        Row: {
+          agent_id: string
+          capability_id: string | null
+          duration_ms: number | null
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+          summary: string
+          title: string
+        }
+        Insert: {
+          agent_id: string
+          capability_id?: string | null
+          duration_ms?: number | null
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          summary?: string
+          title: string
+        }
+        Update: {
+          agent_id?: string
+          capability_id?: string | null
+          duration_ms?: number | null
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          summary?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_runs_capability_id_fkey"
+            columns: ["capability_id"]
+            isOneToOne: false
+            referencedRelation: "agent_capabilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agents: {
+        Row: {
+          config: Json
+          created_at: string
+          description: string
+          id: string
+          kind: string
+          last_heartbeat_at: string | null
+          name: string
+          slug: string
+          status: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          description?: string
+          id?: string
+          kind?: string
+          last_heartbeat_at?: string | null
+          name: string
+          slug: string
+          status?: string
+          updated_at?: string
+          version?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          description?: string
+          id?: string
+          kind?: string
+          last_heartbeat_at?: string | null
+          name?: string
+          slug?: string
+          status?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      audit_log: {
+        Row: {
+          action: string
+          actor: string | null
+          actor_email: string
+          created_at: string
+          details: Json
+          id: string
+          target: string
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          actor_email?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          target?: string
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          actor_email?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          target?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
