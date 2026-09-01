@@ -70,7 +70,11 @@ def request_json(
     timeout: float = 30,
 ) -> dict[str, Any]:
     encoded = None if body is None else json.dumps(body, separators=(",", ":")).encode()
-    request_headers = {"Accept": "application/json", **(headers or {})}
+    request_headers = {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Hermes-Control-Bridge/1.0",
+        **(headers or {}),
+    }
     if encoded is not None:
         request_headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=encoded, headers=request_headers, method=method)
