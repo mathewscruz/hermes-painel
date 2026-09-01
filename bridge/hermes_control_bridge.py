@@ -48,7 +48,7 @@ _SECRET_PATTERNS = [
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def redact(value: Any, limit: int = 8_000) -> str:
