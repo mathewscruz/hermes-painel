@@ -10,33 +10,82 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as MapaRouteImport } from './routes/mapa'
+import { Route as AgentesSlugRouteImport } from './routes/agentes.$slug'
+import { Route as ApiPublicHermesHeartbeatRouteImport } from './routes/api/public/hermes/heartbeat'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MapaRoute = MapaRouteImport.update({
+  id: '/mapa',
+  path: '/mapa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentesSlugRoute = AgentesSlugRouteImport.update({
+  id: '/agentes/$slug',
+  path: '/agentes/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicHermesHeartbeatRoute =
+  ApiPublicHermesHeartbeatRouteImport.update({
+    id: '/api/public/hermes/heartbeat',
+    path: '/api/public/hermes/heartbeat',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/mapa': typeof MapaRoute
+  '/agentes/$slug': typeof AgentesSlugRoute
+  '/api/public/hermes/heartbeat': typeof ApiPublicHermesHeartbeatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/mapa': typeof MapaRoute
+  '/agentes/$slug': typeof AgentesSlugRoute
+  '/api/public/hermes/heartbeat': typeof ApiPublicHermesHeartbeatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/mapa': typeof MapaRoute
+  '/agentes/$slug': typeof AgentesSlugRoute
+  '/api/public/hermes/heartbeat': typeof ApiPublicHermesHeartbeatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    '/' | '/auth' | '/mapa' | '/agentes/$slug' | '/api/public/hermes/heartbeat'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    '/' | '/auth' | '/mapa' | '/agentes/$slug' | '/api/public/hermes/heartbeat'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/mapa'
+    | '/agentes/$slug'
+    | '/api/public/hermes/heartbeat'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
+  MapaRoute: typeof MapaRoute
+  AgentesSlugRoute: typeof AgentesSlugRoute
+  ApiPublicHermesHeartbeatRoute: typeof ApiPublicHermesHeartbeatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +97,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mapa': {
+      id: '/mapa'
+      path: '/mapa'
+      fullPath: '/mapa'
+      preLoaderRoute: typeof MapaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agentes/$slug': {
+      id: '/agentes/$slug'
+      path: '/agentes/$slug'
+      fullPath: '/agentes/$slug'
+      preLoaderRoute: typeof AgentesSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hermes/heartbeat': {
+      id: '/api/public/hermes/heartbeat'
+      path: '/api/public/hermes/heartbeat'
+      fullPath: '/api/public/hermes/heartbeat'
+      preLoaderRoute: typeof ApiPublicHermesHeartbeatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
+  MapaRoute: MapaRoute,
+  AgentesSlugRoute: AgentesSlugRoute,
+  ApiPublicHermesHeartbeatRoute: ApiPublicHermesHeartbeatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
